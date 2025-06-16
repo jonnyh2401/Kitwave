@@ -1,0 +1,175 @@
+﻿@inherits LayoutComponentBase
+
+@inject NavigationManager Navigation
+@inject UserSessionService UserSession
+@using AppointmentPlanner.Data;
+@using AppointmentPlanner.Models;
+@using Microsoft.JSInterop;
+@inject IJSRuntime JSRuntime;
+
+@code {
+    private bool IsLoginPage => Navigation.Uri.Contains("/login", StringComparison.OrdinalIgnoreCase);
+    private bool IsNewObservationPage => Navigation.Uri.Contains("/observations/new", StringComparison.OrdinalIgnoreCase);
+    private string hide = "";
+    private string visible = "hidden";
+    private string opacity = "0";
+    private bool open;
+    private bool isDevice;
+    private bool _loadedSession = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_loadedSession)
+        {
+            await UserSession.LoadSession();
+            _loadedSession = true;
+            StateHasChanged();
+        }
+    }
+
+    private async Task Logout()
+    {
+        await UserSession.Logout();
+        Navigation.NavigateTo("/login", true);
+    }
+
+    private void GoToLogin()
+    {
+        Navigation.NavigateTo("/login", true);
+    }
+
+    private void CloseSidePane()
+    {
+        if (isDevice)
+        {
+            open = false;
+        }
+    }
+
+    public void OnCreate()
+    {
+        hide = "sb-hide";
+        visible = "visible";
+        opacity = "1";
+    }
+
+    private void showSideBar()
+    {
+        open = true;
+    }
+}
+
+<div class="sb-content-overlay @(hide)" style="@(IsLoginPage ? "display:none;" : "")">
+    <div class="sb-caption">
+        <img src="css/appoinment/assets/images/Kitwave.png" alt="Kitwave Logo" />
+    </div>
+    <div class="sb-loading">
+        <svg class="circular" height="40" width="40">
+            <circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="6" stroke-miterlimit="10" />
+        </svg>
+    </div>
+    <div class="sb-caption">
+        <h4 class="my-4">Kitwave EHS initializing...</h4>
+    </div>
+</div>
+<div class="planner-wrapper" style="width: 100%; visibility:@(visible); opacity:@(opacity)">
+    <div class="planner-header">
+        <SfAppBar ColorMode="AppBarColor.Primary" CssClass="custom-appbar">
+            <div class="side-bar-opener">
+                <span class="open-icon e-icons" @onclick="@showSideBar"></span>
+            </div>
+            <div class="name-cantainer">
+                <img src="css/appoinment/assets/images/KitwaveFavicon.png" alt="Kitwave Favicon" />
+                <h1 class="clinic-name appointment-title"> EHS System</h1>
+            </div>
+            <AppBarSpacer></AppBarSpacer>
+            @if (UserSession.IsLoggedIn)
+            {
+                <div class='logout-container' @onclick="Logout" style="cursor:pointer;">
+                    <div class="logout-icon-container"><span class="icon-logout logout-image"></span></div>
+                    <span class='logout-name'>Logout</span>
+                </div>
+            }
+            else
+            {
+                <div class='logout-container' @onclick="GoToLogin" style="cursor:pointer;">
+                    <div class="logout-icon-container"><span class="icon-login logout-image"></span></div>
+                    <span class='logout-name'>Login</span>
+                </div>
+            }
+        </SfAppBar>
+    </div>
+    <SfSidebar ID="plannerSiderBar"
+               EnableGestures="false"
+               @bind-IsOpen="open"
+               MediaQuery="(min-width: 600px)"
+               Type="SidebarType.Auto"
+               Created="OnCreate"
+               CloseOnDocumentClick="false">
+        <ChildContent>
+            @if (UserSession.IsLoggedIn && UserSession.CurrentUser != null)
+            {
+                <div class="dock">
+                    <div class="info align-center">
+                        <div class="image">
+                            <img src="@UserSession.CurrentUser.ImageUrl" alt="User" />
+                        </div>
+                        <div class="content nameContent">
+                            <p class='name'>
+                                @UserSession.CurrentUser.FirstName @UserSession.CurrentUser.LastName
+                            </p>
+                            <p class='user-type'>
+                                @UserSession.CurrentUser.AccessLevel
+                            </p>
+                        </div>
+                    </div>
+                    <div class="sideparent menulist">
+                        <ul class="nav flex-column">
+                            <li class="nav-item">
+                                <NavLink class="nav-link sidebar-item observation-link observation-compact" href="/Dashboard" Match="NavLinkMatch.All" @onclick="@CloseSidePane">
+                                    <span class="e-icons e-table-properties"></span>
+                                    <span class="sidebar-link-text">Dashboard</span>
+                                </NavLink>
+                            </li>
+                        </ul>
+                        <ul class="nav flex-column">
+                            <li class="nav-item">
+                                <NavLink class="nav-link sidebar-item observation-link observation-compact" href="/observations/new" Match="NavLinkMatch.All" @onclick="@CloseSidePane">
+                                    <span class="item-image icon-upload_photo"></span>
+                                    <span class="sidebar-link-text">New Observation</span>
+                                </NavLink>
+                            </li>
+                        </ul>
+                        <ul class="nav flex-column">
+                            <li class="nav-item">
+                                <NavLink class="nav-link sidebar-item observation-link observation-compact" href="/change-password" @onclick="@CloseSidePane">
+                                    <span class="e-icons e-password"></span>
+                                    <span class="sidebar-link-text">Change Password</span>
+                                </NavLink>
+                            </li>
+                        </ul>
+                        <ul class="nav flex-column">
+                            @if (UserSession.CurrentUser.AccessLevel?.Equals("kitwaveadmin", StringComparison.OrdinalIgnoreCase) == true)
+                            {
+                                <li class="nav-item">
+                                    <NavLink class="nav-link sidebar-item observation-link observation-compact" href="/users" @onclick="@CloseSidePane">
+                                        <span class="e-icons e-people"></span>
+                                        <span class="sidebar-link-text">User List</span>
+                                    </NavLink>
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <!-- Sidebar is rendered but hidden for anonymous users -->
+                <div style="display:none"></div>
+            }
+        </ChildContent>
+    </SfSidebar>
+    <main class="main-content">
+        @Body
+    </main>
+</div>

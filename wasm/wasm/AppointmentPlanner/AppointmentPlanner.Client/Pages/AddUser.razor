@@ -1,0 +1,198 @@
+﻿@page "/users/add"
+@using Microsoft.AspNetCore.Components.Forms
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject UserSessionService UserSession
+
+<h3>Add New User</h3>
+
+@if (!UserSession.IsLoggedIn || !IsKitwaveAdmin)
+{
+    <div class="alert alert-warning">You do not have permission to add users.</div>
+}
+else
+{
+    <EditForm Model="newUser" OnValidSubmit="HandleAddUser">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="form-group mb-2">
+            <label>First Name</label>
+            <InputText class="@($"form-control{(string.IsNullOrWhiteSpace(newUser.FirstName) ? " input-invalid" : "")}")" @bind-Value="newUser.FirstName" required />
+        </div>
+        <div class="form-group mb-2">
+            <label>Last Name</label>
+            <InputText class="@($"form-control{(string.IsNullOrWhiteSpace(newUser.LastName) ? " input-invalid" : "")}")" @bind-Value="newUser.LastName" required />
+        </div>
+        <div class="form-group mb-2">
+            <label>Email</label>
+            <InputText class="@($"form-control{(string.IsNullOrWhiteSpace(newUser.Email) ? " input-invalid" : "")}")" @bind-Value="newUser.Email" required />
+        </div>
+        <div class="form-group mb-2">
+            <label>Username</label>
+            <InputText class="@($"form-control{(string.IsNullOrWhiteSpace(newUser.Username) ? " input-invalid" : "")}")" @bind-Value="newUser.Username" required />
+        </div>
+        <div class="form-group mb-2">
+            <label>Password</label>
+            <InputText class="@($"form-control{(string.IsNullOrWhiteSpace(newUser.PasswordHash) ? " input-invalid" : "")}")" @bind-Value="newUser.PasswordHash" type="password" required />
+        </div>
+        <div class="form-group mb-2">
+            <label>Company</label>
+            <select class="@($"form-control{(string.IsNullOrWhiteSpace(selectedCompany) ? " input-invalid" : "")}")" @bind="selectedCompany">
+                <option value="">-- Select Company --</option>
+                @foreach (var company in companySites.Keys)
+                {
+                    <option value="@company">@company</option>
+                }
+            </select>
+        </div>
+        <div class="form-group mb-2">
+            <label>Site</label>
+            <select class="@($"form-control{(string.IsNullOrWhiteSpace(newUser.Site) ? " input-invalid" : "")}")" @bind="newUser.Site" disabled="@string.IsNullOrEmpty(selectedCompany)">
+                <option value="">-- Select Site --</option>
+                @foreach (var site in filteredSites)
+                {
+                    <option value="@site">@site</option>
+                }
+            </select>
+        </div>
+        <div class="form-group mb-2">
+            <label>Access Level</label>
+            <select class="@($"form-control{(string.IsNullOrWhiteSpace(newUser.AccessLevel) ? " input-invalid" : "")}")" @bind="newUser.AccessLevel">
+                <option value="">-- Select Access Level --</option>
+                <option value="kitwaveadmin">Kitwave Admin</option>
+                <option value="CompanyAdmin">Company Admin</option>
+                <option value="SiteAdmin">Site Admin</option>
+            </select>
+        </div>
+        <div class="form-group mb-2">
+            <label>Profile Image</label>
+            <InputFile OnChange="OnImageSelected" accept="image/*" class="form-control" />
+            @if (!string.IsNullOrEmpty(previewImageUrl))
+            {
+                <div class="mt-2">
+                    <img src="@previewImageUrl" alt="Preview" style="height:80px;width:80px;border-radius:50%;object-fit:cover;border:2px solid #eee;" />
+                </div>
+            }
+        </div>
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger">@errorMessage</div>
+        }
+        <button class="btn btn-primary" type="submit">Add User</button>
+        <button class="btn btn-secondary ms-2" type="button" @onclick="Cancel">Cancel</button>
+    </EditForm>
+}
+
+@code {
+    private User newUser = new();
+    private string selectedCompany;
+    private List<string> filteredSites = new();
+    private string previewImageUrl;
+    private IBrowserFile uploadedImageFile;
+    private string errorMessage;
+
+    // Company to sites dictionary (same as in UserList.razor)
+    private Dictionary<string, List<string>> companySites = new()
+    {
+        { "HB Clark", new List<string> { "Wakefield", "Bolton","Cumbria", "Hull","Keighley","Kirkham","Newcastle","Sheffield" } },
+        { "Eden Farm", new List<string> { "Luton","Armstrong Road", "Bradford", "Cradley Heath", "Glasgow", "Kirkham","Newport", "PeterLee","Sheffield" } },
+        { "Creed", new List<string> { "Ilkiston", "High Wycombe", "Staverton" } },
+        { "Total Food Service", new List<string> { "York","Hull","Huddersfield","Clitheroe Depot" } },
+        { "M&M Value", new List<string> {"Cumbria","North Shiedls" } },
+        { "Teatime Tasties", new List<string> {"Bradford","Manchester"  } },
+        { "Turner & Wrights", new List<string> {"Bolton"  } },
+        { "West Country", new List<string> {"Falmouth","St Austell", "Ugbrooke"  } },
+        { "Westone Wholesale", new List<string> {"Telford"  } },
+        { "Wilds Of Oldham", new List<string> { "Oldham" } },
+        { "Kitwave", new List<string> { "HQ" } }
+    };
+
+    private bool IsKitwaveAdmin =>
+        UserSession.CurrentUser?.AccessLevel?.Equals("kitwaveadmin", StringComparison.OrdinalIgnoreCase) == true;
+
+    protected override void OnInitialized()
+    {
+        selectedCompany = "";
+        filteredSites = new List<string>();
+    }
+
+    protected override void OnParametersSet()
+    {
+        UpdateFilteredSites();
+    }
+
+    private void UpdateFilteredSites()
+    {
+        filteredSites = companySites.ContainsKey(selectedCompany)
+            ? new List<string>(companySites[selectedCompany])
+            : new List<string>();
+        if (!filteredSites.Contains(newUser.Site))
+            newUser.Site = "";
+        newUser.Company = selectedCompany;
+    }
+
+    private async Task OnImageSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file == null)
+            return;
+
+        uploadedImageFile = file;
+        var maxAllowedSize = 1024 * 1024 * 2;
+        using var stream = file.OpenReadStream(maxAllowedSize);
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms);
+        var base64 = Convert.ToBase64String(ms.ToArray());
+        var imageType = file.ContentType;
+        previewImageUrl = $"data:{imageType};base64,{base64}";
+        newUser.ImageUrl = previewImageUrl;
+        StateHasChanged();
+    }
+
+    private async Task HandleAddUser()
+    {
+        errorMessage = null;
+        newUser.Company = selectedCompany;
+
+        if (string.IsNullOrWhiteSpace(newUser.FirstName) ||
+            string.IsNullOrWhiteSpace(newUser.LastName) ||
+            string.IsNullOrWhiteSpace(newUser.Email) ||
+            string.IsNullOrWhiteSpace(newUser.Username) ||
+            string.IsNullOrWhiteSpace(newUser.PasswordHash) ||
+            string.IsNullOrWhiteSpace(newUser.Company) ||
+            string.IsNullOrWhiteSpace(newUser.AccessLevel) ||
+            string.IsNullOrWhiteSpace(newUser.Site))
+        {
+            errorMessage = "All fields except Image are required.";
+            return;
+        }
+
+        var response = await Http.PostAsJsonAsync("api/users", newUser);
+        if (response.IsSuccessStatusCode)
+        {
+            Navigation.NavigateTo("/users");
+        }
+        else
+        {
+            errorMessage = "Failed to add user.";
+        }
+    }
+
+    private void Cancel()
+    {
+        Navigation.NavigateTo("/users");
+    }
+
+    // Watch for company change to update sites
+    private string _lastCompany;
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (_lastCompany != selectedCompany)
+        {
+            _lastCompany = selectedCompany;
+            UpdateFilteredSites();
+            StateHasChanged();
+        }
+    }
+}

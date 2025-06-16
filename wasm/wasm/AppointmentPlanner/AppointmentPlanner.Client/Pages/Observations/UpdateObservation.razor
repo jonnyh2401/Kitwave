@@ -1,0 +1,300 @@
+﻿@rendermode InteractiveWebAssembly
+@page "/observations/update/{Id:int}"
+@using Microsoft.AspNetCore.Components.Forms
+@using AppointmentPlanner.Shared.DTOs
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject UserSessionService UserSession
+
+<h3>Update Safety Observation</h3>
+@if (!_sessionLoaded)
+{
+    <div>Loading session...</div>
+}
+else if (!UserSession.IsLoggedIn)
+{
+    <div>Redirecting to login...</div>
+}
+else
+{
+    <EditForm Model="@observation" OnValidSubmit="HandleValidSubmit">
+        <div class="form-group">
+            <label>Company</label>
+            <InputText class="form-control" @bind-Value="observation.Company" disabled />
+        </div>
+        <div class="form-group">
+            <label>Site Location</label>
+            <span class="form-control" style="background-color: #e9ecef;">@((observation.Site != null ? observation.Site.Name : string.Empty))</span>
+        </div>
+        <div class="form-group">
+            <label>Type of Report</label>
+            <InputText class="form-control" @bind-Value="observation.TypeOfReport" disabled />
+        </div>
+        <div class="form-group">
+            <label>Nature of Observation</label>
+            <InputText class="form-control" @bind-Value="observation.NatureOfObservation" disabled />
+        </div>
+        @if (observation.DescriptionOfSuggestion != null)
+        {
+            <div class="form-group">
+                <label>Description of Suggestion</label>
+                <InputTextArea class="form-control" @bind-Value="observation.DescriptionOfSuggestion" disabled />
+            </div>
+        }
+        @if (observation.DescriptionOfObservation != null)
+        {
+            <div class="form-group">
+                <label>Description of Observation</label>
+                <InputTextArea class="form-control" @bind-Value="observation.DescriptionOfObservation" disabled />
+            </div>
+        }
+        <div class="form-group">
+            <label>Upload Images</label>
+            <InputFile OnChange="HandleFilesSelected" accept="image/*" Multiple="true" />
+            <div>
+                <span style="color:red">@debugMessage</span>
+            </div>
+        </div>
+        @if (imagePreviewUrls.Any())
+        {
+            <div class="form-group">
+                <div style="margin-top:10px; display: flex; gap: 10px; flex-wrap: wrap;">
+                    @foreach (var url in imagePreviewUrls.Select((img, idx) => new { img, idx }))
+                    {
+                        <div style="position: relative; display: inline-block;">
+                            <img src="@url.img" alt="Preview" style="max-width: 150px; max-height: 150px; border: 1px solid #ccc;" />
+                            <button type="button"
+                                    @onclick="() => RemoveImage(url.idx)"
+                                    style="position: absolute; top: 2px; right: 2px; background: #dc3545; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-weight: bold; line-height: 18px; padding: 0;">
+                                &times;
+                            </button>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+        <div class="form-group">
+            <label>Name of Person Making Report</label>
+            <InputText class="form-control" @bind-Value="observation.ReporterName" disabled />
+        </div>
+        <div class="form-group">
+            <label>Status</label>
+            <InputSelect class="form-control" @bind-Value="observation.Status">
+                <option value="">-- Select Status --</option>
+                <option value="Outstanding">Outstanding</option>
+                <option value="Closed">Closed</option>
+                <option value="Invalid">Invalid</option>
+            </InputSelect>
+        </div>
+        <div class="form-group">
+            <label>Update Notes</label>
+            <div style="max-height: 200px; overflow-y: auto; border: 1px solid #ccc; border-radius: 4px; padding: 8px; background: #f9f9f9;">
+                @if (observation.Updates != null && observation.Updates.Any())
+                {
+                    <ul class="list-unstyled mb-0">
+                        @foreach (var note in observation.Updates.OrderByDescending(n => n.Timestamp))
+                        {
+                            <li style="margin-bottom: 10px;">
+                                <div style="font-size: 0.95em; color: #333;">@note.Note</div>
+                                <div style="font-size: 0.8em; color: #888;">
+                                    <span>@note.Author</span> &middot; <span>@note.Timestamp.ToString("g")</span>
+                                </div>
+                                <hr style="margin: 6px 0;" />
+                            </li>
+                        }
+                    </ul>
+                }
+                else
+                {
+                    <div class="text-muted">No update notes yet.</div>
+                }
+            </div>
+            <button type="button" class="btn btn-secondary mt-2" @onclick="ShowAddNoteDialog">Add Note</button>
+        </div>
+        @if (observation.Status == "Closed")
+        {
+            <div class="form-group">
+                <label>Close Out Notes</label>
+                <InputTextArea class="form-control" @bind-Value="observation.CloseOutNotes" />
+            </div>
+        }
+        @if (observation.Status == "Invalid")
+        {
+            <div class="form-group">
+                <label>Reason For Invalid</label>
+                <InputTextArea class="form-control" @bind-Value="observation.ReasonForInvalid" />
+            </div>
+        }
+        @if (showAddNoteDialog)
+        {
+            <div class="modal-backdrop fade show"></div>
+            <div class="modal d-block" tabindex="-1" style="background: rgba(0,0,0,0.2);">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Add Update Note</h5>
+                            <button type="button" class="btn-close" @onclick="CloseAddNoteDialog"></button>
+                        </div>
+                        <div class="modal-body">
+                            <InputTextArea class="form-control" @bind-Value="newNoteText" placeholder="Enter your update note..." />
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" @onclick="CloseAddNoteDialog">Cancel</button>
+                            <button type="button" class="btn btn-primary" @onclick="AddUpdateNote" disabled="@string.IsNullOrWhiteSpace(newNoteText)">Add Note</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+        <button type="submit" class="btn btn-primary">Update</button>
+    </EditForm>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private ObservationDto observation = new();
+    private List<string> imagePreviewUrls = new();
+    private string debugMessage = "";
+    private bool showAddNoteDialog = false;
+    private string newNoteText = "";
+    private bool _sessionLoaded = false;
+    private bool _observationLoaded = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            if (!UserSession.IsLoggedIn)
+            {
+                await UserSession.LoadSession();
+            }
+            _sessionLoaded = true;
+            StateHasChanged();
+        }
+
+        // Load observation only after session is loaded and not yet loaded
+        if (_sessionLoaded && !_observationLoaded && UserSession.IsLoggedIn)
+        {
+            await LoadObservation();
+            _observationLoaded = true;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadObservation()
+    {
+        try
+        {
+            var result = await Http.GetFromJsonAsync<ObservationDto>($"api/observations/{Id}");
+            if (result != null)
+            {
+                observation = result;
+                imagePreviewUrls = observation.UploadedImageUrls ?? new List<string>();
+            }
+            else
+            {
+                debugMessage = "Observation not found.";
+            }
+        }
+        catch (Exception ex)
+        {
+            debugMessage = $"Error loading observation: {ex.Message}";
+        }
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        try
+        {
+            observation.UploadedImageUrls = imagePreviewUrls;
+
+            var response = await Http.PutAsJsonAsync($"api/observations/{observation.ObservationId}", observation);
+            if (response.IsSuccessStatusCode)
+            {
+                Navigation.NavigateTo("/dashboard");
+                return;
+            }
+            else
+            {
+                debugMessage = "Failed to update observation.";
+            }
+        }
+        catch (Exception ex)
+        {
+            debugMessage = $"Error updating observation: {ex.Message}";
+        }
+    }
+
+    private async Task HandleFilesSelected(InputFileChangeEventArgs e)
+    {
+        debugMessage = "Preview Loading...";
+
+        foreach (var file in e.GetMultipleFiles())
+        {
+            if (!file.ContentType.StartsWith("image/"))
+                continue;
+
+            const long maxFileSize = 2 * 1024 * 1024;
+            var bufferSize = (int)Math.Min(file.Size, maxFileSize);
+
+            using var stream = file.OpenReadStream(maxFileSize);
+            var buffer = new byte[bufferSize];
+            int read;
+            int totalRead = 0;
+            while ((read = await stream.ReadAsync(buffer, totalRead, bufferSize - totalRead)) > 0)
+            {
+                totalRead += read;
+            }
+
+            var previewUrl = $"data:{file.ContentType};base64,{Convert.ToBase64String(buffer, 0, totalRead)}";
+            imagePreviewUrls.Add(previewUrl);
+        }
+
+        debugMessage = "";
+        StateHasChanged();
+    }
+
+    private void ShowAddNoteDialog()
+    {
+        newNoteText = "";
+        showAddNoteDialog = true;
+    }
+
+    private void CloseAddNoteDialog()
+    {
+        showAddNoteDialog = false;
+    }
+
+    private void AddUpdateNote()
+    {
+        if (string.IsNullOrWhiteSpace(newNoteText)) return;
+
+        observation.Updates ??= new List<UpdateNoteDto>();
+        observation.Updates.Add(new UpdateNoteDto
+        {
+            Note = newNoteText,
+            Author = UserSession?.CurrentUser != null
+                ? $"{UserSession.CurrentUser.FirstName} {UserSession.CurrentUser.LastName}"
+                : "Unknown",
+            Timestamp = DateTime.Now
+        });
+
+        showAddNoteDialog = false;
+    }
+
+    private void RemoveImage(int index)
+    {
+        if (index >= 0 && index < imagePreviewUrls.Count)
+        {
+            imagePreviewUrls.RemoveAt(index);
+            StateHasChanged();
+        }
+    }
+
+    public class SiteDto
+    {
+        public int SiteId { get; set; }
+        public string Name { get; set; }
+    }
+}

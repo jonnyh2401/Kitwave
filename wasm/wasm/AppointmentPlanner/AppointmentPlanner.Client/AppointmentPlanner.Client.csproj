@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <NoDefaultLaunchSettingsFile>true</NoDefaultLaunchSettingsFile>
+    <StaticWebAssetProjectMode>Default</StaticWebAssetProjectMode>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.Communication.Email" Version="1.0.1" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="8.0.0" />
+	  <PackageReference Include="Syncfusion.Blazor.Charts" Version="*" />
+	  <PackageReference Include="Syncfusion.Blazor.Grid" Version="*" />
+	  <PackageReference Include="Syncfusion.Blazor.Popups" Version="*" />
+	  <PackageReference Include="Syncfusion.Blazor.Navigations" Version="*" />
+	  <!-- Only if you use SfSidebar, SfAppBar, etc. -->
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AppointmentPlanner.Shared\AppointmentPlanner.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

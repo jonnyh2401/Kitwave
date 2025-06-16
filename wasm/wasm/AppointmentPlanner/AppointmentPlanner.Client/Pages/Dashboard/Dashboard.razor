@@ -1,0 +1,488 @@
+﻿@page "/"
+@page "/dashboard"
+@using Syncfusion.Blazor.Charts
+@using Syncfusion.Blazor.Grids
+@using AppointmentPlanner.Shared
+@using Microsoft.AspNetCore.Components.Web
+@using System.Net.Http.Json
+@inject NavigationManager Navigation
+@inject UserSessionService UserSession
+@inject HttpClient Http
+
+@if (!UserSession.IsLoggedIn)
+{
+    <div></div>
+    return;
+}
+
+@if (!shouldRender)
+{
+    <div></div>
+    return;
+}
+
+@if (!isSessionLoaded)
+{
+    <div class="sb-content-overlay" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;">
+        <div class="sb-loading">
+            <svg class="circular" height="40" width="40">
+                <circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="6" stroke-miterlimit="10" />
+            </svg>
+        </div>
+        <div class="sb-caption">
+            <h4 class="my-4">Kitwave EHS initializing...</h4>
+        </div>
+    </div>
+    return;
+}
+
+@if (isDataLoaded)
+{
+    <div class="dashboard-container" style="padding:2rem; background:#fff; min-height:100vh;">
+        <div class="row mb-3" style="gap:1rem;">
+            <div class="col" style="min-width:220px;">
+                <label>Company:</label>
+                <select class="form-control" @bind="SelectedCompany" disabled="@(!IsKitwaveAdmin)">
+                    <option value="">-- All Companies --</option>
+                    @foreach (var company in companySites.Keys)
+                    {
+                        <option value="@company">@company</option>
+                    }
+                </select>
+            </div>
+            <div class="col" style="min-width:220px;">
+                <label>Site:</label>
+                <select class="form-control" @bind="SelectedSite" disabled="@(IsSiteAdmin)">
+                    <option value="">-- All Sites --</option>
+                    @foreach (var site in filteredSites)
+                    {
+                        <option value="@site">@site</option>
+                    }
+                </select>
+            </div>
+            <div class="col" style="min-width:220px;">
+                <label>Month:</label>
+                <select class="form-control" @bind="SelectedMonth">
+                    <option value="">-- All Months --</option>
+                    @foreach (var month in availableMonths)
+                    {
+                        <option value="@month">@month</option>
+                    }
+                </select>
+            </div>
+            <div class="col d-flex align-items-end" style="min-width:180px;">
+                <button class="btn btn-dark w-100" @onclick="ResetFilters">Reset Filters</button>
+            </div>
+        </div>
+
+        <div class="row mb-4" style="gap:1rem;">
+            <div class="col" style="background:#f6fcf7; border-radius:12px; box-shadow:0 2px 8px #e6e6e6; padding:1.5rem; min-width:200px; cursor:pointer;" @onclick="@(() => FilterByType("Good Observation"))">
+                <div style="font-size:1.2rem; color:#4b4b4b;">Total Good</div>
+                <div style="font-size:2.5rem; color:#2ecc40; font-weight:bold;">@totalGood</div>
+            </div>
+            <div class="col" style="background:#fdf6f6; border-radius:12px; box-shadow:0 2px 8px #e6e6e6; padding:1.5rem; min-width:200px; cursor:pointer;" @onclick="@(() => FilterByType("Bad Observation"))">
+                <div style="font-size:1.2rem; color:#4b4b4b;">Total Bad</div>
+                <div style="font-size:2.5rem; color:#ff3b3b; font-weight:bold;">@totalBad</div>
+            </div>
+            <div class="col" style="background:#f6faff; border-radius:12px; box-shadow:0 2px 8px #e6e6e6; padding:1.5rem; min-width:200px; cursor:pointer;" @onclick="@(() => FilterByType("HS Suggestion"))">
+                <div style="font-size:1.2rem; color:#4b4b4b;">Total HS Suggestions</div>
+                <div style="font-size:2.5rem; color:#3498db; font-weight:bold;">@totalHS</div>
+            </div>
+            <div class="col" style="background:#fff8f3; border-radius:12px; box-shadow:0 2px 8px #e6e6e6; padding:1.5rem; min-width:200px; border:1.5px solid #ffb48a; cursor:pointer;" @onclick="@(() => FilterByStatus("Invalid"))">
+                <div style="font-size:1.2rem; color:#4b4b4b;">Total Invalid</div>
+                <div style="font-size:2.5rem; color:#e67e22; font-weight:bold;">@totalInvalid</div>
+            </div>
+        </div>
+
+        <div class="row" style="gap:2rem;">
+            <div class="col-5" style="min-width:350px;">
+                <div style="font-weight:600; margin-bottom:0.5rem;">Reports Status</div>
+                <SfAccumulationChart Height="320px" Width="100%" @ref="pieChart" Title="Observation Status">
+                    <AccumulationChartEvents OnPointClick="OnPiePointClick" />
+                    <AccumulationChartSeriesCollection>
+                        <AccumulationChartSeries DataSource="@pieData" XName="Status" YName="Count" InnerRadius="40%">
+                            <AccumulationChartSeriesBorder Width="0"></AccumulationChartSeriesBorder>
+                            <AccumulationDataLabelSettings Visible="true">
+                                <AccumulationChartDataLabelFont Size="18px" FontWeight="Bold" />
+                            </AccumulationDataLabelSettings>
+                        </AccumulationChartSeries>
+                    </AccumulationChartSeriesCollection>
+                    <AccumulationChartLegendSettings Visible="true" Position="LegendPosition.Right"></AccumulationChartLegendSettings>
+                </SfAccumulationChart>
+            </div>
+            <div class="col" style="min-width:500px;">
+                <div style="font-weight:600; margin-bottom:0.5rem;">@gridTitle</div>
+                <SfGrid DataSource="@filteredReports" AllowPaging="false" Height="320px">
+                    <GridColumns>
+                        <GridColumn HeaderText="Edit" Width="70" TextAlign="TextAlign.Center">
+                            <Template>
+                                <button class="btn btn-sm btn-primary"
+                                        style="padding: 0.25rem 0.5rem; background: none; border: none;"
+                                        title="Edit"
+                                        @onclick="@(e => NavigateToUpdate(((context as ObservationDto).ObservationId)))">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="#bbb" class="bi bi-pencil" viewBox="0 0 16 16">
+                                        <path d="M12.146.854a.5.5 0 0 1 .708 0l2.292 2.292a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zm1.415 2.121L13.5 2.207 13.793 2.5l.061.061a.5.5 0 0 1-.061.707l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10a.5.5 0 0 1 .707 0z" />
+                                    </svg>
+                                </button>
+                            </Template>
+                        </GridColumn>
+                        <GridColumn Field="ObservationId" HeaderText="ID" Width="40" Visible="false" TextAlign="TextAlign.Center" />
+                        <GridColumn Field="Status" HeaderText="Status" Width="100" />
+                        <GridColumn Field="Type" HeaderText="Type" Width="100" />
+                        <GridColumn Field="Company" HeaderText="Company" Width="130" />
+                        <GridColumn Field="Site.Name" HeaderText="Site" Width="130" />
+                    </GridColumns>
+                </SfGrid>
+                <div class="mt-3" style="font-size:1.1rem;">
+                    Avg Time to Close Out:
+                    <span style="color:#3498db; font-weight:600;">
+                        @(avgCloseOutDays.HasValue ? $"{avgCloseOutDays.Value:F1} days" : "N/A")
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="sb-content-overlay" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;">
+        <div class="sb-loading">
+            <svg class="circular" height="40" width="40">
+                <circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="6" stroke-miterlimit="10" />
+            </svg>
+        </div>
+        <div class="sb-caption">
+            <h4 class="my-4">Kitwave EHS initializing...</h4>
+        </div>
+    </div>
+}
+
+@code {
+    private SfGrid<ObservationDto> grid;
+    private SfAccumulationChart pieChart;
+
+    private bool shouldRender = true;
+    private bool isDataLoaded = false;
+    private bool isSessionLoaded = false;
+    private bool hasCalledLoadSession = false;
+    private int totalGood, totalBad, totalHS, totalInvalid;
+    private double? avgCloseOutDays;
+    private List<ObservationDto> reports = new();
+    private List<PieData> pieData = new();
+    private List<ObservationDto> filteredReports = new();
+    private string gridTitle = "Outstanding Reports";
+
+    // Search
+    private string searchIdText = "";
+
+    private void SearchById()
+    {
+        if (int.TryParse(searchIdText, out int id))
+        {
+            var exists = reports.Any(r => r.ObservationId == id);
+            if (exists)
+            {
+                // Navigation.NavigateTo($"/UpdateObservation/{id}");
+            }
+            else
+            {
+                // Optionally show a message: "Observation not found"
+            }
+        }
+        else
+        {
+            // Optionally show a message: "Please enter a valid ID"
+        }
+    }
+
+    private void OnSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            SearchById();
+        }
+    }
+
+    // Filtering
+    private string selectedCompany = "";
+    private string selectedSite = "";
+    private List<string> filteredSites = new();
+    private string currentTypeFilter = "";
+    private string selectedMonth = "";
+    private List<string> availableMonths = new();
+
+    // Company to sites dictionary (copy from your observation form)
+    private Dictionary<string, List<string>> companySites = new()
+    {
+        { "HB Clark", new List<string> { "Wakefield", "Bolton","Cumbria", "Hull","Keighley","Kirkham","Newcastle","Sheffield" } },
+        { "Eden Farm", new List<string> { "Luton","Armstrong Road", "Bradford", "Cradley Heath", "Glasgow", "Kirkham","Newport", "PeterLee","Sheffield" } },
+        { "Creed", new List<string> { "Ilkiston", "High Wycombe", "Staverton" } },
+        { "Total Food Service", new List<string> { "York","Hull","Huddersfield","Clitheroe Depot" } },
+        { "M&M Value", new List<string> {"Cumbria","North Shiedls" } },
+        { "Teatime Tasties", new List<string> {"Bradford","Manchester"  } },
+        { "Turner & Wrights", new List<string> {"Bolton"  } },
+        { "West Country", new List<string> {"Falmouth","St Austell", "Ugbrooke"  } },
+        { "Westone Wholesale", new List<string> {"Telford"  } },
+        { "Wilds Of Oldham", new List<string> { "Oldham" } }
+    };
+
+    // Role helpers
+    private bool IsKitwaveAdmin => string.Equals(UserSession.CurrentUser?.AccessLevel, "kitwaveadmin", StringComparison.OrdinalIgnoreCase);
+    private bool IsCompanyAdmin => string.Equals(UserSession.CurrentUser?.AccessLevel, "CompanyAdmin", StringComparison.OrdinalIgnoreCase);
+    private bool IsSiteAdmin => string.Equals(UserSession.CurrentUser?.AccessLevel, "SiteAdmin", StringComparison.OrdinalIgnoreCase);
+    private string currentStatusFilter = "";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !hasCalledLoadSession)
+        {
+            hasCalledLoadSession = true;
+            await UserSession.LoadSession();
+            isSessionLoaded = true;
+
+            if (!UserSession.IsLoggedIn)
+            {
+                shouldRender = false;
+                Navigation.NavigateTo("/login", true);
+                return;
+            }
+
+            // Set filters based on user role
+            if (IsCompanyAdmin)
+            {
+                selectedCompany = UserSession.CurrentUser.Company;
+                filteredSites = companySites.ContainsKey(selectedCompany)
+                    ? new List<string>(companySites[selectedCompany])
+                    : new List<string>();
+            }
+            else if (IsSiteAdmin)
+            {
+                selectedCompany = UserSession.CurrentUser.Company;
+                selectedSite = UserSession.CurrentUser.Site;
+                filteredSites = companySites.ContainsKey(selectedCompany)
+                    ? new List<string>(companySites[selectedCompany])
+                    : new List<string>();
+            }
+
+            // 1. Get data from API
+            try
+            {
+                var apiReports = await Http.GetFromJsonAsync<List<ObservationDto>>("api/observations");
+                reports = apiReports ?? new List<ObservationDto>();
+            }
+            catch
+            {
+                reports = new List<ObservationDto>();
+                // Optionally handle error (show message, etc.)
+            }
+
+            UpdateAvailableMonths();
+            ApplyFilters();
+            isDataLoaded = true;
+
+            StateHasChanged();
+        }
+    }
+
+    private void NavigateToUpdate(int id)
+    {
+        Navigation.NavigateTo($"/observations/update/{id}");
+    }
+
+    private string SelectedCompany
+    {
+        get => selectedCompany;
+        set
+        {
+            if (selectedCompany != value)
+            {
+                selectedCompany = value;
+                // Update filtered sites
+                if (!string.IsNullOrEmpty(selectedCompany) && companySites.TryGetValue(selectedCompany, out var sites))
+                    filteredSites = new List<string>(sites);
+                else
+                    filteredSites = new List<string>();
+                // Reset site selection
+                selectedSite = "";
+                currentTypeFilter = "";
+                ApplyFilters();
+            }
+        }
+    }
+
+    private string SelectedSite
+    {
+        get => selectedSite;
+        set
+        {
+            if (selectedSite != value)
+            {
+                selectedSite = value;
+                currentTypeFilter = "";
+                ApplyFilters();
+            }
+        }
+    }
+
+    private string SelectedMonth
+    {
+        get => selectedMonth;
+        set
+        {
+            if (selectedMonth != value)
+            {
+                selectedMonth = value;
+                currentTypeFilter = "";
+                ApplyFilters();
+            }
+        }
+    }
+
+    private void UpdateAvailableMonths()
+    {
+        availableMonths = reports
+            .Select(r => new DateTime(r.RaisedDateTime.Year, r.RaisedDateTime.Month, 1))
+            .Distinct()
+            .OrderByDescending(d => d)
+            .Select(d => d.ToString("MMMM yyyy"))
+            .ToList();
+    }
+
+    private void ApplyFilters()
+    {
+        IEnumerable<ObservationDto> query = reports;
+
+        // Use Company for filtering
+        if (!string.IsNullOrEmpty(selectedCompany))
+            query = query.Where(r => r.Company == selectedCompany);
+
+        if (!string.IsNullOrEmpty(selectedSite))
+            query = query.Where(r => r.Site.Name == selectedSite);
+
+        if (!string.IsNullOrEmpty(selectedMonth))
+        {
+            if (DateTime.TryParseExact(selectedMonth, "MMMM yyyy", null, System.Globalization.DateTimeStyles.None, out var monthDate))
+            {
+                query = query.Where(r => r.RaisedDateTime.Year == monthDate.Year && r.RaisedDateTime.Month == monthDate.Month);
+            }
+        }
+
+        if (!string.IsNullOrEmpty(currentTypeFilter))
+            query = query.Where(r => r.Type == currentTypeFilter);
+
+        if (!string.IsNullOrEmpty(currentStatusFilter))
+            query = query.Where(r => r.Status == currentStatusFilter);
+
+
+        // Stats
+        totalGood = query.Count(r => r.Type == "Good Observation");
+        totalBad = query.Count(r => r.Type == "Bad Observation");
+        totalHS = query.Count(r => r.Type == "HS Suggestion");
+        totalInvalid = query.Count(r => r.Status == "Invalid");
+
+        // Pie data
+        pieData = query
+            .GroupBy(r => r.Status)
+            .Select(g => new PieData { Status = g.Key, Count = g.Count() })
+            .ToList();
+
+        // Avg close out days
+        var closedReports = query
+            .Where(r => r.Status == "Closed" && r.ClosedOutDateTime.HasValue)
+            .ToList();
+
+        if (closedReports.Any())
+            avgCloseOutDays = closedReports.Average(r => (r.ClosedOutDateTime.Value - r.RaisedDateTime).TotalDays);
+        else
+            avgCloseOutDays = null;
+
+        // Grid
+        if (!string.IsNullOrEmpty(currentTypeFilter))
+        {
+            filteredReports = query.Where(r => r.Type == currentTypeFilter).ToList();
+            gridTitle = $"{currentTypeFilter} Reports";
+        }
+        else if (!string.IsNullOrEmpty(currentStatusFilter)) // New condition for status filter
+        {
+            filteredReports = query.Where(r => r.Status == currentStatusFilter).ToList();
+            gridTitle = $"{currentStatusFilter} Reports";
+        }
+        else
+        {
+            filteredReports = query.ToList();
+            gridTitle = "All Reports";
+        }
+    }
+
+    private void ResetFilters()
+    {
+        if (IsKitwaveAdmin)
+        {
+            selectedCompany = "";
+            selectedSite = "";
+            filteredSites = new List<string>();
+        }
+        else if (IsCompanyAdmin)
+        {
+            selectedCompany = UserSession.CurrentUser.Company;
+            filteredSites = companySites.ContainsKey(selectedCompany)
+                ? new List<string>(companySites[selectedCompany])
+                : new List<string>();
+            selectedSite = "";
+        }
+        else if (IsSiteAdmin)
+        {
+            selectedCompany = UserSession.CurrentUser.Company;
+            selectedSite = UserSession.CurrentUser.Site;
+            filteredSites = companySites.ContainsKey(selectedCompany)
+                ? new List<string>(companySites[selectedCompany])
+                : new List<string>();
+        }
+        selectedMonth = "";
+        currentTypeFilter = "";
+        currentStatusFilter = ""; // Add this
+        ApplyFilters();
+    }
+
+    private void OnPiePointClick(AccumulationPointEventArgs args)
+    {
+        var status = args.Point?.X?.ToString();
+        if (!string.IsNullOrEmpty(status))
+        {
+            IEnumerable<ObservationDto> query = reports;
+            if (!string.IsNullOrEmpty(selectedCompany))
+                query = query.Where(r => r.Company == selectedCompany);
+            if (!string.IsNullOrEmpty(selectedSite))
+                query = query.Where(r => r.Site.Name == selectedSite);
+            if (!string.IsNullOrEmpty(selectedMonth))
+            {
+                var monthDate = DateTime.ParseExact(selectedMonth, "MMMM yyyy", null);
+                query = query.Where(r => r.RaisedDateTime.Year == monthDate.Year && r.RaisedDateTime.Month == monthDate.Month);
+            }
+
+            filteredReports = query.Where(r => r.Status == status).ToList();
+            gridTitle = $"{status} Reports";
+            StateHasChanged();
+        }
+    }
+
+    private void FilterByType(string type)
+    {
+        currentTypeFilter = type;
+        currentStatusFilter = ""; // Clear status filter when filtering by type
+        ApplyFilters();
+    }
+
+    private void FilterByStatus(string status)
+    {
+        currentStatusFilter = status;
+        currentTypeFilter = ""; // Clear type filter when filtering by status
+        ApplyFilters();
+    }
+
+    public class PieData
+    {
+        public string Status { get; set; }
+        public int Count { get; set; }
+    }
+}

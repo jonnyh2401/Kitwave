@@ -1,0 +1,71 @@
+﻿@page "/login"
+@layout LoginLayout
+@inject NavigationManager Navigation
+@inject UserSessionService UserSession
+@inject HttpClient Http
+@using AppointmentPlanner.Client
+
+<div class="login-container">
+    <form @onsubmit="HandleLogin" @onsubmit:preventDefault>
+        <img src="css/appoinment/assets/images/Kitwave.png" alt="Kitwave Logo" class="login-logo" />
+        <h2 class="login-title">Login</h2>
+        <div class="form-group">
+            <label>Username</label>
+            <input class="form-control" @bind="username" autocomplete="username" />
+        </div>
+        <div class="form-group">
+            <label>Password</label>
+            <input class="form-control" type="password" @bind="password" autocomplete="current-password" />
+        </div>
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="text-danger mb-2">@errorMessage</div>
+        }
+        <button class="btn btn-primary btn-block" type="submit">Login</button>
+    </form>
+</div>
+
+@code {
+    private string username;
+    private string password;
+    private string errorMessage;
+    private string returnUrl;
+
+    protected override void OnInitialized()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var query = uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries);
+        foreach (var param in query)
+        {
+            var kvp = param.Split('=', 2);
+            if (kvp.Length == 2 && kvp[0] == "returnUrl")
+            {
+                returnUrl = Uri.UnescapeDataString(kvp[1]);
+                break;
+            }
+        }
+    }
+
+    private async Task HandleLogin()
+    {
+        errorMessage = null;
+        var response = await Http.PostAsJsonAsync("api/auth/login", new { Username = username, Password = password });
+        if (response.IsSuccessStatusCode)
+        {
+            var user = await response.Content.ReadFromJsonAsync<User>();
+            await UserSession.Login(user);
+            if (!string.IsNullOrWhiteSpace(returnUrl))
+            {
+                Navigation.NavigateTo(returnUrl, true);
+            }
+            else
+            {
+                Navigation.NavigateTo("/dashboard", true);
+            }
+        }
+        else
+        {
+            errorMessage = "Invalid username or password.";
+        }
+    }
+}

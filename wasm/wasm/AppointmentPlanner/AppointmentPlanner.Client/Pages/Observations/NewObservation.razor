@@ -1,0 +1,275 @@
+﻿@page "/observations/new"
+@using Microsoft.AspNetCore.Components.Forms
+@using Syncfusion.Blazor.Popups
+
+@inject UserSessionService UserSession
+@inject NavigationManager Navigation
+@inject HttpClient Http
+
+@if (!UserSession.IsLoggedIn)
+{
+    <div class="alert alert-info">You are not logged in. You can still submit an observation.</div>
+}
+
+<h3>New Safety Observation</h3>
+<EditForm Model="@observation" OnValidSubmit="HandleValidSubmit">
+    <div class="form-group">
+        <label>Company</label>
+        <InputSelect class="form-control" TValue="int" @bind-Value="observation.CompanyId">
+            <option value="">-- Select Company --</option>
+            @foreach (var company in companies)
+            {
+                <option value="@company.CompanyId">@company.Name</option>
+            }
+        </InputSelect>
+    </div>
+    <div class="form-group">
+        <label>Site Location</label>
+        <InputSelect class="form-control" TValue="int" @bind-Value="observation.SiteId">
+            <option value="">-- Select Site --</option>
+            @foreach (var site in filteredSites)
+            {
+                <option value="@site.SiteId">@site.Name</option>
+            }
+        </InputSelect>
+    </div>
+    <div class="form-group">
+        <label>Type of Report</label>
+        <InputSelect class="form-control" @bind-Value="observation.TypeOfReport">
+            <option value="">-- Select Type Of Report --</option>
+            @foreach (var type in types)
+            {
+                <option value="@type">@type</option>
+            }
+        </InputSelect>
+    </div>
+    @if(observation.TypeOfReport != "HS Suggestion")
+    {
+        <div class="form-group">
+            <label>Nature of Observation</label>
+            <InputSelect class="form-control" @bind-Value="observation.NatureOfObservation">
+                <option value="">-- Select Nature Of Observation --</option>
+                @foreach (var nature in natures)
+                {
+                    <option value="@nature">@nature</option>
+                }
+            </InputSelect>
+        </div>
+    }
+    @if (observation.TypeOfReport == "HS Suggestion")
+    {
+        <div class="form-group">
+            <label>Description of Suggestion</label>
+            <InputTextArea class="form-control" @bind-Value="observation.DescriptionOfSuggestion" />
+        </div>
+    }
+    @if (observation.TypeOfReport == "Good Observation" || observation.TypeOfReport == "Bad Observation")
+    {
+        <div class="form-group">
+            <label>Description of Observation</label>
+            <InputTextArea class="form-control" @bind-Value="observation.DescriptionOfObservation" />
+        </div>
+    }
+    <div class="form-group">
+        <label>Upload Images</label>
+        <InputFile OnChange="HandleFilesSelected" accept="image/*" Multiple="true" />
+        <div>
+            <span style="color:red">@debugMessage</span>
+        </div>
+    </div>
+    @if (imagePreviewUrls.Any())
+    {
+        <div class="form-group">
+            <div style="margin-top:10px; display: flex; gap: 10px; flex-wrap: wrap;">
+                @foreach (var url in imagePreviewUrls)
+                {
+                    <img src="@url" alt="Preview" style="max-width: 150px; max-height: 150px; border: 1px solid #ccc;" />
+                }
+            </div>
+        </div>
+    }
+
+    <div class="form-group">
+        <label>Name of Person Making Report</label>
+        <InputText class="form-control" @bind-Value="observation.ReporterName" />
+    </div>
+    <button type="submit" class="btn btn-primary">Submit</button>
+</EditForm>
+
+<SfDialog @bind-Visible="showDialog"
+          Width="350px"
+          IsModal="true"
+          ShowCloseIcon="true"
+          Header="Observation Submitted"
+          OnClose="OnDialogClose">
+    <div style="padding:1rem;">
+        <strong>@lastTypeOfReport</strong> raised successfully.
+    </div>
+</SfDialog>
+
+@code {
+    private ObservationModel observation = new();
+    private List<string> imagePreviewUrls = new();
+    private bool showDialog = false;
+    private string debugMessage = "";
+    private string? lastTypeOfReport;
+
+    // Data loaded from API
+    private List<CompanyDto> companies = new();
+    private List<SiteDto> filteredSites = new();
+
+    private List<string> types = new() { "Good Observation", "Bad Observation", "HS Suggestion" };
+    private List<string> natures = new() { "Location Of People", "Rules/Procedures", "Housekeeping", "Manual Handling/Ergonomics", "Equipment/Tools", "Lighting", "Vehicles", "PPE", "Other" };
+
+    private int previousCompanyId = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCompanies();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // React to company change and load sites
+        if (observation.CompanyId != previousCompanyId)
+        {
+            previousCompanyId = observation.CompanyId;
+            await LoadSitesForCompany(observation.CompanyId);
+        }
+    }
+
+    private async Task LoadCompanies()
+    {
+        try
+        {
+            companies = await Http.GetFromJsonAsync<List<CompanyDto>>("api/companies") ?? new();
+        }
+        catch
+        {
+            debugMessage = "Failed to load companies.";
+        }
+    }
+
+    private async Task LoadSitesForCompany(int companyId)
+    {
+        observation.SiteId = 0;
+        filteredSites.Clear();
+
+        if (companyId > 0)
+        {
+            try
+            {
+                filteredSites = await Http.GetFromJsonAsync<List<SiteDto>>($"api/companies/{companyId}/sites") ?? new();
+            }
+            catch
+            {
+                debugMessage = "Failed to load sites for selected company.";
+            }
+        }
+        else
+        {
+            filteredSites = new List<SiteDto>();
+        }
+        StateHasChanged();
+    }
+
+    private async Task HandleFilesSelected(InputFileChangeEventArgs e)
+    {
+        debugMessage = "Preview Loading...";
+        imagePreviewUrls.Clear();
+
+        foreach (var file in e.GetMultipleFiles())
+        {
+            if (!file.ContentType.StartsWith("image/"))
+                continue;
+
+            const long maxFileSize = 2 * 1024 * 1024;
+            var bufferSize = (int)Math.Min(file.Size, maxFileSize);
+
+            using var stream = file.OpenReadStream(maxFileSize);
+            var buffer = new byte[bufferSize];
+            int read;
+            int totalRead = 0;
+            while ((read = await stream.ReadAsync(buffer, totalRead, bufferSize - totalRead)) > 0)
+            {
+                totalRead += read;
+            }
+
+            var previewUrl = $"data:{file.ContentType};base64,{Convert.ToBase64String(buffer, 0, totalRead)}";
+            imagePreviewUrls.Add(previewUrl);
+        }
+
+        debugMessage = "";
+        StateHasChanged();
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        debugMessage = "";
+
+        try
+        {
+            var apiObservation = new
+            {
+                CompanyId = observation.CompanyId,
+                SiteId = observation.SiteId,
+                TypeOfReport = observation.TypeOfReport,
+                NatureOfObservation = observation.NatureOfObservation,
+                DescriptionOfSuggestion = observation.DescriptionOfSuggestion,
+                DescriptionOfObservation = observation.DescriptionOfObservation,
+                ReporterName = observation.ReporterName,
+                UploadedImageUrls = imagePreviewUrls, // Now a list
+                Status = "Outstanding",
+                Type = observation.TypeOfReport
+            };
+
+            var response = await Http.PostAsJsonAsync("api/observations", apiObservation);
+
+            if (response.IsSuccessStatusCode)
+            {
+                lastTypeOfReport = observation.TypeOfReport;
+                observation = new ObservationModel();
+                imagePreviewUrls = new List<string>();
+                filteredSites = new List<SiteDto>();
+                StateHasChanged();
+                showDialog = true;
+            }
+            else
+            {
+                debugMessage = "Failed to submit observation.";
+            }
+        }
+        catch (Exception ex)
+        {
+            debugMessage = $"Error submitting observation: {ex.Message}";
+        }
+    }
+
+    private void OnDialogClose(Syncfusion.Blazor.Popups.CloseEventArgs args)
+    {
+        showDialog = false;
+    }
+
+    public class ObservationModel
+    {
+        public int CompanyId { get; set; }
+        public int SiteId { get; set; }
+        public string TypeOfReport { get; set; }
+        public string NatureOfObservation { get; set; }
+        public string DescriptionOfSuggestion { get; set; }
+        public string DescriptionOfObservation { get; set; }
+        public string ReporterName { get; set; }
+    }
+
+    public class CompanyDto
+    {
+        public int CompanyId { get; set; }
+        public string Name { get; set; }
+    }
+
+    public class SiteDto
+    {
+        public int SiteId { get; set; }
+        public string Name { get; set; }
+    }
+}

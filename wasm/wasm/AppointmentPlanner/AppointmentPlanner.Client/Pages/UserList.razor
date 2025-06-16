@@ -1,0 +1,368 @@
+﻿@page "/users"
+@using AppointmentPlanner.Client
+@using Syncfusion.Blazor.Grids
+@using Syncfusion.Blazor.Popups
+@using Microsoft.AspNetCore.Components.Forms
+@inject UserSessionService UserSession
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<h3>All Users</h3>
+
+@if (!UserSession.IsLoggedIn || !IsKitwaveAdmin)
+{
+    <div class="alert alert-warning">You do not have permission to view this page.</div>
+}
+else if (isLoading)
+{
+    <div>Loading users...</div>
+}
+else
+{
+    @* Add User button for Kitwave Admins *@
+    <div class="mb-3">
+        <button class="btn btn-success" @onclick="NavigateToAddUser">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="white" class="bi bi-plus-circle me-1" viewBox="0 0 16 16">
+                <path d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14zm0 1A8 8 0 1 1 8 0a8 8 0 0 1 0 16z"/>
+                <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
+            </svg>
+            Add User
+        </button>
+    </div>
+
+    <SfGrid DataSource="@users" AllowPaging="false">
+        <GridColumns>
+            <GridColumn HeaderText="Edit" Width="60" TextAlign="TextAlign.Center">
+                <Template>
+                    <button class="btn btn-sm"
+                            style="padding: 0.25rem 0.5rem; background: none; border: none;"
+                            title="Edit"
+                            @onclick="() => OpenEditDialog(context as User)">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="#bbb" class="bi bi-pencil" viewBox="0 0 16 16">
+                            <path d="M12.146.854a.5.5 0 0 1 .708 0l2.292 2.292a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zm1.415 2.121L13.5 2.207 13.793 2.5l.061.061a.5.5 0 0 1-.061.707l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10a.5.5 0 0 1 .707 0z" />
+                        </svg>
+                    </button>
+                </Template>
+            </GridColumn>
+            <GridColumn HeaderText="Delete" Width="60" TextAlign="TextAlign.Center">
+                <Template>
+                    <button class="btn btn-sm text-danger"
+                            style="padding: 0.25rem 0.5rem; background: none; border: none;"
+                            title="Delete"
+                            @onclick="() => ShowDeleteConfirmation(context as User)">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="#dc3545" class="bi bi-trash" viewBox="0 0 16 16">
+                            <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5.5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6zm3 .5a.5.5 0 0 1 .5-.5.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6z"/>
+                            <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1 0-2h3.5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1H14a1 1 0 0 1 1 1zm-11 1v9a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4h-8z"/>
+                        </svg>
+                    </button>
+                </Template>
+            </GridColumn>
+            <GridColumn Field="UserId" HeaderText="ID" Width="60" TextAlign="TextAlign.Center" />
+            <GridColumn Field="FirstName" HeaderText="First Name" Width="120" />
+            <GridColumn Field="LastName" HeaderText="Last Name" Width="120" />
+            <GridColumn Field="Company" HeaderText="Company" Width="140" />
+            <GridColumn Field="Site" HeaderText="Site" Width="120" />
+            <GridColumn Field="Email" HeaderText="Email" Width="180" />
+            <GridColumn Field="Username" HeaderText="Username" Width="120" />
+            <GridColumn Field="AccessLevel" HeaderText="Access Level" Width="120" />
+            <GridColumn Field="ImageUrl" HeaderText="Image" Width="100">
+                <Template>
+                    <img src="@((context as User).ImageUrl)" alt="User" style="height:40px;width:40px;border-radius:50%;object-fit:cover;" />
+                </Template>
+            </GridColumn>
+        </GridColumns>
+    </SfGrid>
+}
+
+<SfDialog @bind-Visible="showEditDialog"
+          Width="400px"
+          IsModal="true"
+          ShowCloseIcon="true"
+          Header="Edit User"
+          OnClose="OnDialogClose">
+    @if (editUser != null)
+    {
+        <div>
+            <div class="d-flex flex-column align-items-center mb-3">
+                <label class="mb-1">User Photo Preview</label>
+                <img src="@previewImageUrl"
+                     alt="User Preview"
+                     style="height:80px;width:80px;border-radius:50%;object-fit:cover;border:2px solid #eee;box-shadow:0 2px 8px #e6e6e6;" />
+            </div>
+            <div class="form-group mb-2">
+                <label>Upload New Photo</label>
+                <InputFile OnChange="OnImageSelected" accept="image/*" class="form-control" />
+            </div>
+            <div class="form-group mb-2">
+                <label>Email</label>
+                <InputText class="form-control" @bind-Value="editUser.Email" required />
+            </div>
+            <div class="form-group mb-2">
+                <label>Company</label>
+                <select class="form-control" @bind="editCompany">
+                    <option value="">-- Select Company --</option>
+                    @foreach (var company in companySites.Keys)
+                    {
+                        <option value="@company">@company</option>
+                    }
+                </select>
+            </div>
+            <div class="form-group mb-2">
+                <label>Site</label>
+                <select class="form-control" @bind="editSite">
+                    <option value="">-- Select Site --</option>
+                    @foreach (var site in filteredSites)
+                    {
+                        <option value="@site">@site</option>
+                    }
+                </select>
+            </div>
+            <div class="form-group mb-2">
+                <label>Access Level</label>
+                <select class="form-control" @bind="editAccessLevel">
+                    <option value="kitwaveadmin">kitwaveadmin</option>
+                    <option value="CompanyAdmin">CompanyAdmin</option>
+                    <option value="SiteAdmin">SiteAdmin</option>
+                </select>
+            </div>
+            @if (!string.IsNullOrEmpty(editError))
+            {
+                <div class="alert alert-danger">@editError</div>
+            }
+            <div class="d-flex justify-content-end mt-3">
+                <button class="btn btn-primary" @onclick="UpdateUser">Update</button>
+            </div>
+        </div>
+    }
+</SfDialog>
+
+<SfDialog @bind-Visible="showDeleteDialog"
+          Width="350px"
+          IsModal="true"
+          ShowCloseIcon="true"
+          Header="Confirm Delete"
+          OnClose="OnDeleteDialogClose">
+    <div>
+        <p>Are you sure you want to delete user <strong>@deleteUser?.FirstName @deleteUser?.LastName</strong>?</p>
+        <div class="d-flex justify-content-end mt-3">
+            <button class="btn btn-secondary me-2" @onclick="CancelDelete">Cancel</button>
+            <button class="btn btn-danger" @onclick="ConfirmDelete">Delete</button>
+        </div>
+    </div>
+</SfDialog>
+
+@code {
+    private List<User> users = new();
+    private bool isLoading = true;
+    private bool showEditDialog = false;
+    private User editUser;
+    private string _editCompany;
+    private string editCompany
+    {
+        get => _editCompany;
+        set
+        {
+            if (_editCompany != value)
+            {
+                _editCompany = value;
+                filteredSites = companySites.ContainsKey(_editCompany)
+                    ? new List<string>(companySites[_editCompany])
+                    : new List<string>();
+                if (!filteredSites.Contains(editSite))
+                    editSite = "";
+            }
+        }
+    }
+    private string editSite;
+    private string editAccessLevel;
+    private string editError;
+    private List<string> filteredSites = new();
+
+    // For image upload/preview
+    private string previewImageUrl;
+    private IBrowserFile uploadedImageFile;
+
+    // Company to sites dictionary
+    private Dictionary<string, List<string>> companySites = new()
+    {
+        { "HB Clark", new List<string> { "Wakefield", "Bolton","Cumbria", "Hull","Keighley","Kirkham","Newcastle","Sheffield" } },
+        { "Eden Farm", new List<string> { "Luton","Armstrong Road", "Bradford", "Cradley Heath", "Glasgow", "Kirkham","Newport", "PeterLee","Sheffield" } },
+        { "Creed", new List<string> { "Ilkiston", "High Wycombe", "Staverton" } },
+        { "Total Food Service", new List<string> { "York","Hull","Huddersfield","Clitheroe Depot" } },
+        { "M&M Value", new List<string> {"Cumbria","North Shiedls" } },
+        { "Teatime Tasties", new List<string> {"Bradford","Manchester"  } },
+        { "Turner & Wrights", new List<string> {"Bolton"  } },
+        { "West Country", new List<string> {"Falmouth","St Austell", "Ugbrooke"  } },
+        { "Westone Wholesale", new List<string> {"Telford"  } },
+        { "Wilds Of Oldham", new List<string> { "Oldham" } },
+        { "Kitwave", new List<string> { "HQ" } }
+    };
+
+    private bool IsKitwaveAdmin =>
+        UserSession.CurrentUser?.AccessLevel?.Equals("kitwaveadmin", StringComparison.OrdinalIgnoreCase) == true;
+
+    private void NavigateToAddUser()
+    {
+        Navigation.NavigateTo("/users/add");
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUsers();
+    }
+
+    private async Task LoadUsers()
+    {
+        isLoading = true;
+        try
+        {
+            users = await Http.GetFromJsonAsync<List<User>>("api/users");
+        }
+        catch
+        {
+            users = new List<User>();
+        }
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    private void OpenEditDialog(User user)
+    {
+        editUser = new User
+        {
+            UserId = user.UserId,
+            FirstName = user.FirstName,
+            LastName = user.LastName,
+            Company = user.Company,
+            Site = user.Site,
+            Email = user.Email,
+            Username = user.Username,
+            AccessLevel = user.AccessLevel,
+            ImageUrl = user.ImageUrl,
+            PasswordHash = user.PasswordHash
+        };
+        editCompany = user.Company;
+        editSite = user.Site;
+        editAccessLevel = user.AccessLevel;
+        editError = null;
+        filteredSites = companySites.ContainsKey(editCompany)
+            ? new List<string>(companySites[editCompany])
+            : new List<string>();
+        previewImageUrl = user.ImageUrl;
+        uploadedImageFile = null;
+        showEditDialog = true;
+    }
+
+    private async Task OnImageSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file == null)
+            return;
+
+        uploadedImageFile = file;
+
+        // Limit the file size for preview (e.g., 2MB)
+        var maxAllowedSize = 1024 * 1024 * 2;
+        using var stream = file.OpenReadStream(maxAllowedSize);
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms);
+        var base64 = Convert.ToBase64String(ms.ToArray());
+        var imageType = file.ContentType;
+        previewImageUrl = $"data:{imageType};base64,{base64}";
+
+        // Force UI update
+        StateHasChanged();
+    }
+
+    private async Task UpdateUser()
+    {
+        if (editUser == null)
+            return;
+
+        if (string.IsNullOrWhiteSpace(editCompany))
+        {
+            editError = "Company is required.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(editAccessLevel))
+        {
+            editError = "Access Level is required.";
+            return;
+        }
+
+        editUser.Company = editCompany;
+        editUser.Site = editSite;
+        editUser.AccessLevel = editAccessLevel;
+
+        if (!string.IsNullOrEmpty(previewImageUrl) && previewImageUrl.StartsWith("data:"))
+        {
+            editUser.ImageUrl = previewImageUrl;
+        }
+
+        var response = await Http.PutAsJsonAsync($"api/users/{editUser.UserId}", editUser);
+        if (response.IsSuccessStatusCode)
+        {
+            // If the updated user is the current user, update the session and force a UI refresh
+            if (UserSession.CurrentUser != null && UserSession.CurrentUser.UserId == editUser.UserId)
+            {
+                await UserSession.Login(editUser); // This updates localStorage and CurrentUser
+                                                   // Optionally, force a navigation to the same page to refresh MainLayout
+                Navigation.NavigateTo(Navigation.Uri, forceLoad: true);
+            }
+
+            await LoadUsers();
+            showEditDialog = false;
+        }
+        else
+        {
+            editError = "Failed to update user.";
+        }
+        StateHasChanged();
+    }
+
+    private void OnDialogClose(CloseEventArgs args)
+    {
+        showEditDialog = false;
+        editUser = null;
+        editError = null;
+    }
+
+    // --- Delete logic below ---
+
+    private bool showDeleteDialog = false;
+    private User deleteUser;
+
+    private void ShowDeleteConfirmation(User user)
+    {
+        deleteUser = user;
+        showDeleteDialog = true;
+    }
+
+    private void OnDeleteDialogClose(CloseEventArgs args)
+    {
+        showDeleteDialog = false;
+        deleteUser = null;
+    }
+
+    private void CancelDelete()
+    {
+        showDeleteDialog = false;
+        deleteUser = null;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (deleteUser != null)
+        {
+            var response = await Http.DeleteAsync($"api/users/{deleteUser.UserId}");
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadUsers(); // Refresh the list from the server
+            }
+            // Optionally handle errors here
+        }
+        showDeleteDialog = false;
+        deleteUser = null;
+        StateHasChanged();
+    }
+}

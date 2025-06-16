@@ -1,0 +1,13 @@
+C:\Users\Jonny\Documents\Kitwave EHS\Kitwave\wasm\wasm\AppointmentPlanner\AppointmentPlanner.Shared\bin\Debug\net8.0\AppointmentPlanner.Shared.deps.json
+C:\Users\Jonny\Documents\Kitwave EHS\Kitwave\wasm\wasm\AppointmentPlanner\AppointmentPlanner.Shared\bin\Debug\net8.0\AppointmentPlanner.Shared.dll
+C:\Users\Jonny\Documents\Kitwave EHS\Kitwave\wasm\wasm\AppointmentPlanner\AppointmentPlanner.Shared\bin\Debug\net8.0\AppointmentPlanner.Shared.pdb
+C:\Users\Jonny\Documents\Kitwave EHS\Kitwave\wasm\wasm\AppointmentPlanner\AppointmentPlanner.Shared\obj\Debug\net8.0\AppointmentPlanner.Shared.csproj.AssemblyReference.cache
+C:\Users\Jonny\Documents\Kitwave EHS\Kitwave\wasm\wasm\AppointmentPlanner\AppointmentPlanner.Shared\obj\Debug\net8.0\AppointmentPlanner.Shared.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Jonny\Documents\Kitwave EHS\Kitwave\wasm\wasm\AppointmentPlanner\AppointmentPlanner.Shared\obj\Debug\net8.0\AppointmentPlanner.Shared.AssemblyInfoInputs.cache
+C:\Users\Jonny\Documents\Kitwave EHS\Kitwave\wasm\wasm\AppointmentPlanner\AppointmentPlanner.Shared\obj\Debug\net8.0\AppointmentPlanner.Shared.AssemblyInfo.cs
+C:\Users\Jonny\Documents\Kitwave EHS\Kitwave\wasm\wasm\AppointmentPlanner\AppointmentPlanner.Shared\obj\Debug\net8.0\AppointmentPlanner.Shared.csproj.CoreCompileInputs.cache
+C:\Users\Jonny\Documents\Kitwave EHS\Kitwave\wasm\wasm\AppointmentPlanner\AppointmentPlanner.Shared\obj\Debug\net8.0\AppointmentPlanner.Shared.sourcelink.json
+C:\Users\Jonny\Documents\Kitwave EHS\Kitwave\wasm\wasm\AppointmentPlanner\AppointmentPlanner.Shared\obj\Debug\net8.0\AppointmentPlanner.Shared.dll
+C:\Users\Jonny\Documents\Kitwave EHS\Kitwave\wasm\wasm\AppointmentPlanner\AppointmentPlanner.Shared\obj\Debug\net8.0\refint\AppointmentPlanner.Shared.dll
+C:\Users\Jonny\Documents\Kitwave EHS\Kitwave\wasm\wasm\AppointmentPlanner\AppointmentPlanner.Shared\obj\Debug\net8.0\AppointmentPlanner.Shared.pdb
+C:\Users\Jonny\Documents\Kitwave EHS\Kitwave\wasm\wasm\AppointmentPlanner\AppointmentPlanner.Shared\obj\Debug\net8.0\ref\AppointmentPlanner.Shared.dll

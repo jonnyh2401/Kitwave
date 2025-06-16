@@ -1,0 +1,23 @@
+﻿@inherits LayoutComponentBase
+
+@inject NavigationManager Navigation
+@inject UserSessionService UserSession
+
+<div class="planner-wrapper" style="width: 100%;">
+    <div class="planner-header">
+        <SfAppBar ColorMode="AppBarColor.Primary" CssClass="custom-appbar">
+            <div class="side-bar-opener">
+                <span class="open-icon e-icons"></span>
+            </div>
+            <div class="name-cantainer">
+                <img src="css/appoinment/assets/images/KitwaveFavicon.png" alt="Kitwave Favicon" />
+                <h1 class="clinic-name appointment-title"> EHS System</h1>
+            </div>
+            <AppBarSpacer></AppBarSpacer>
+            <!-- No logout button here -->
+        </SfAppBar>
+    </div>
+    <main class="main-content">
+        @Body
+    </main>
+</div>
